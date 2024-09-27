@@ -63,7 +63,7 @@ class PhpSerializer implements SerializerInterface
         }
 
         $signalingException = new MessageDecodingFailedException(sprintf('Could not decode message using PHP serialization: %s.', $contents));
-        $prevUnserializeHandler = ini_set('unserialize_callback_func', self::class.'::handleUnserializeCallback');
+        $prevUnserializeHandler = ini_set('unserialize_callback_func', self::class . '::handleUnserializeCallback');
         $prevErrorHandler = set_error_handler(function ($type, $msg, $file, $line, $context = []) use (&$prevErrorHandler, $signalingException) {
             if (__FILE__ === $file) {
                 throw $signalingException;
@@ -74,6 +74,12 @@ class PhpSerializer implements SerializerInterface
 
         try {
             $meta = unserialize($contents);
+        } catch (\Throwable $e) {
+            if ($e instanceof MessageDecodingFailedException) {
+                throw $e;
+            }
+
+            throw new MessageDecodingFailedException('Could not decode Envelope: ' . $e->getMessage(), 0, $e);
         } finally {
             restore_error_handler();
             ini_set('unserialize_callback_func', $prevUnserializeHandler);
