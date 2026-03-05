@@ -105,20 +105,21 @@ class Connection
     {
         if (false === $parsedUrl = parse_url($dsn)) {
             // this is a valid URI that parse_url cannot handle when you want to pass all parameters as options
-            if ('amqp://' !== $dsn) {
+            if (!\in_array($dsn, ['amqp://', 'amqps://'])) {
                 throw new InvalidArgumentException(sprintf('The given AMQP DSN "%s" is invalid.', $dsn));
             }
 
             $parsedUrl = [];
         }
 
+        $useAmqps = str_starts_with($dsn, 'amqps://');
         $pathParts = isset($parsedUrl['path']) ? explode('/', trim($parsedUrl['path'], '/')) : [];
         $exchangeName = $pathParts[1] ?? 'messages';
         parse_str($parsedUrl['query'] ?? '', $parsedQuery);
 
         $amqpOptions = array_replace_recursive([
             'host' => $parsedUrl['host'] ?? 'localhost',
-            'port' => $parsedUrl['port'] ?? 5672,
+            'port' => $parsedUrl['port'] ?? ($useAmqps ? 5671 : 5672),
             'vhost' => isset($pathParts[0]) ? urldecode($pathParts[0]) : '/',
             'exchange' => [
                 'name' => $exchangeName,
@@ -131,6 +132,13 @@ class Connection
 
         if (isset($parsedUrl['pass'])) {
             $amqpOptions['password'] = urldecode($parsedUrl['pass']);
+        }
+
+        if ($useAmqps) {
+            $amqpOptions['cacert'] = $amqpOptions['cacert'] ?? '';
+            $amqpOptions['cert'] = $amqpOptions['cert'] ?? '';
+            $amqpOptions['key'] = $amqpOptions['key'] ?? '';
+            $amqpOptions['verify'] = $amqpOptions['verify'] ?? true;
         }
 
         if (!isset($amqpOptions['queues'])) {

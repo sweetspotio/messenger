@@ -29,6 +29,6 @@ class AmqpTransportFactory implements TransportFactoryInterface
 
     public function supports(string $dsn, array $options): bool
     {
-        return str_starts_with($dsn, 'amqp://');
+        return str_starts_with($dsn, 'amqp://') || str_starts_with($dsn, 'amqps://');
     }
 }

@@ -24,6 +24,7 @@ class AmqpTransportFactoryTest extends TestCase
         $factory = new AmqpTransportFactory();
 
         $this->assertTrue($factory->supports('amqp://localhost', []));
+        $this->assertTrue($factory->supports('amqps://localhost', []));
         $this->assertFalse($factory->supports('sqs://localhost', []));
         $this->assertFalse($factory->supports('invalid-dsn', []));
     }

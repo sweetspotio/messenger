@@ -565,6 +565,46 @@ class ConnectionTest extends TestCase
         $connection->publish('{}', [], 120000, new AmqpStamp('routing_key'));
     }
 
+    public function testItCanBeConstructedWithAmqpsDsn()
+    {
+        $this->assertEquals(
+            new Connection([
+                'host' => 'localhost',
+                'port' => 5671,
+                'vhost' => '/',
+                'cacert' => '',
+                'cert' => '',
+                'key' => '',
+                'verify' => true,
+            ], [
+                'name' => self::DEFAULT_EXCHANGE_NAME,
+            ], [
+                self::DEFAULT_EXCHANGE_NAME => [],
+            ]),
+            Connection::fromDsn('amqps://localhost')
+        );
+    }
+
+    public function testAmqpsAcceptsEmptyDsn()
+    {
+        $this->assertEquals(
+            new Connection([
+                'host' => 'localhost',
+                'port' => 5671,
+                'vhost' => '/',
+                'cacert' => '',
+                'cert' => '',
+                'key' => '',
+                'verify' => true,
+            ], [
+                'name' => self::DEFAULT_EXCHANGE_NAME,
+            ], [
+                self::DEFAULT_EXCHANGE_NAME => [],
+            ]),
+            Connection::fromDsn('amqps://')
+        );
+    }
+
     public function testItCanPublishWithCustomFlagsAndAttributes()
     {
         $factory = new TestAmqpFactory(
