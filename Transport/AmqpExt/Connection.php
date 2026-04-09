@@ -187,23 +187,25 @@ class Connection
     {
         $this->clearWhenDisconnected();
 
-        if (0 !== $delayInMs) {
-            $this->publishWithDelay($body, $headers, $delayInMs, $amqpStamp);
+        $this->withConnectionExceptionRetry(function () use ($body, $headers, $delayInMs, $amqpStamp) {
+            if (0 !== $delayInMs) {
+                $this->publishWithDelay($body, $headers, $delayInMs, $amqpStamp);
 
-            return;
-        }
+                return;
+            }
 
-        if ($this->shouldSetup()) {
-            $this->setupExchangeAndQueues();
-        }
+            if ($this->shouldSetup()) {
+                $this->setupExchangeAndQueues();
+            }
 
-        $this->publishOnExchange(
-            $this->exchange(),
-            $body,
-            $this->getRoutingKeyForMessage($amqpStamp),
-            $headers,
-            $amqpStamp
-        );
+            $this->publishOnExchange(
+                $this->exchange(),
+                $body,
+                $this->getRoutingKeyForMessage($amqpStamp),
+                $headers,
+                $amqpStamp
+            );
+        });
     }
 
     /**
@@ -442,10 +444,34 @@ class Connection
     private function clearWhenDisconnected(): void
     {
         if (!$this->channel()->isConnected()) {
-            $this->amqpChannel = null;
-            $this->amqpQueues = [];
-            $this->amqpExchange = null;
-            $this->amqpDelayExchange = null;
+            $this->clear();
+        }
+    }
+
+    private function clear(): void
+    {
+        $this->amqpChannel = null;
+        $this->amqpQueues = [];
+        $this->amqpExchange = null;
+        $this->amqpDelayExchange = null;
+    }
+
+    private function withConnectionExceptionRetry(callable $callable): void
+    {
+        $maxRetries = 3;
+        $retries = 0;
+
+        retry:
+        try {
+            $callable();
+        } catch (\AMQPConnectionException $e) {
+            if (++$retries <= $maxRetries) {
+                $this->clear();
+
+                goto retry;
+            }
+
+            throw $e;
         }
     }
 
