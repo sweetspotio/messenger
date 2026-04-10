@@ -187,7 +187,7 @@ class Connection
     {
         $this->clearWhenDisconnected();
 
-        $this->withConnectionExceptionRetry(function () use ($body, $headers, $delayInMs, $amqpStamp) {
+        $this->withAmqpExceptionRetry(function () use ($body, $headers, $delayInMs, $amqpStamp) {
             if (0 !== $delayInMs) {
                 $this->publishWithDelay($body, $headers, $delayInMs, $amqpStamp);
 
@@ -456,7 +456,7 @@ class Connection
         $this->amqpDelayExchange = null;
     }
 
-    private function withConnectionExceptionRetry(callable $callable): void
+    private function withAmqpExceptionRetry(callable $callable): void
     {
         $maxRetries = 3;
         $retries = 0;
@@ -464,7 +464,7 @@ class Connection
         retry:
         try {
             $callable();
-        } catch (\AMQPConnectionException $e) {
+        } catch (\AMQPException $e) {
             if (++$retries <= $maxRetries) {
                 $this->clear();
 
