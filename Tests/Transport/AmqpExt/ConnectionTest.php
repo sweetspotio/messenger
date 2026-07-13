@@ -406,6 +406,43 @@ class ConnectionTest extends TestCase
         $connection->publish('{}', ['x-some-headers' => 'foo'], 5000);
     }
 
+    public function testItMergesDelayQueueArgumentsOverTheDefaults()
+    {
+        $amqpConnection = $this->createMock(\AMQPConnection::class);
+        $amqpChannel = $this->createMock(\AMQPChannel::class);
+
+        $factory = $this->createMock(AmqpFactory::class);
+        $factory->method('createConnection')->willReturn($amqpConnection);
+        $factory->method('createChannel')->willReturn($amqpChannel);
+        $factory->method('createQueue')->will($this->onConsecutiveCalls(
+            $this->createMock(\AMQPQueue::class),
+            $delayQueue = $this->createMock(\AMQPQueue::class)
+        ));
+        $factory->method('createExchange')->will($this->onConsecutiveCalls(
+            $this->createMock(\AMQPExchange::class),
+            $this->createMock(\AMQPExchange::class)
+        ));
+
+        $delayQueue->expects($this->once())->method('setName')->with('delay_messages__5000');
+        $delayQueue->expects($this->once())->method('setArguments')->with([
+            'x-message-ttl' => 5000,
+            'x-expires' => 60000,
+            'x-dead-letter-exchange' => self::DEFAULT_EXCHANGE_NAME,
+            'x-dead-letter-routing-key' => '',
+            'x-queue-type' => 'classic',
+        ]);
+
+        $connection = Connection::fromDsn('amqp://localhost', [
+            'delay' => [
+                'arguments' => [
+                    'x-queue-type' => 'classic',
+                    'x-expires' => 60000,
+                ],
+            ],
+        ], $factory);
+        $connection->publish('{}', [], 5000);
+    }
+
     public function testItDelaysTheMessageWithADifferentRoutingKeyAndTTLs()
     {
         $amqpConnection = $this->createMock(\AMQPConnection::class);

@@ -98,6 +98,9 @@ class Connection
      *   * delay:
      *     * queue_name_pattern: Pattern to use to create the queues (Default: "delay_%exchange_name%_%routing_key%_%delay%")
      *     * exchange_name: Name of the exchange to be used for the delayed/retried messages (Default: "delays")
+     *     * arguments: Extra declare-time arguments for the delay queues, merged over the defaults
+     *       (e.g. ['x-queue-type' => 'classic'] on brokers whose default queue type is quorum,
+     *       backport of symfony/symfony#48603)
      *   * auto_setup: Enable or not the auto-setup of queues and exchanges (Default: true)
      *   * prefetch_count: set channel prefetch count
      */
@@ -291,16 +294,21 @@ class Connection
             $this->connectionOptions['delay']['queue_name_pattern']
         ));
         $queue->setFlags(\AMQP_DURABLE);
-        $queue->setArguments([
+        $queue->setArguments(array_merge([
             'x-message-ttl' => $delay,
             // delete the delay queue 10 seconds after the message expires
             // publishing another message redeclares the queue which renews the lease
+            // WARNING: only classic queues renew the lease on redeclaration; quorum
+            // queues do not (rabbitmq/rabbitmq-server#5894), so on a quorum-default
+            // broker pass delay[arguments][x-queue-type] = classic (or override
+            // x-expires) or delayed messages published 10-25s after queue creation
+            // are destroyed with the queue (symfony/symfony#57867)
             'x-expires' => $delay + 10000,
             'x-dead-letter-exchange' => $this->exchangeOptions['name'],
             // after being released from to DLX, make sure the original routing key will be used
             // we must use an empty string instead of null for the argument to be picked up
             'x-dead-letter-routing-key' => $routingKey ?? '',
-        ]);
+        ], $this->connectionOptions['delay']['arguments'] ?? []));
 
         return $queue;
     }
