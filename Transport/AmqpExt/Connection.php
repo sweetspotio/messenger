@@ -67,8 +67,12 @@ class Connection
             'delay' => [
                 'exchange_name' => 'delays',
                 'queue_name_pattern' => 'delay_%exchange_name%_%routing_key%_%delay%',
+                'queue_expires' => true,
             ],
         ], $connectionOptions);
+        if (\is_string($this->connectionOptions['delay']['queue_expires'])) {
+            $this->connectionOptions['delay']['queue_expires'] = filter_var($this->connectionOptions['delay']['queue_expires'], \FILTER_VALIDATE_BOOLEAN);
+        }
         $this->exchangeOptions = $exchangeOptions;
         $this->queuesOptions = $queuesOptions;
         $this->amqpFactory = $amqpFactory ?? new AmqpFactory();
@@ -98,6 +102,8 @@ class Connection
      *   * delay:
      *     * queue_name_pattern: Pattern to use to create the queues (Default: "delay_%exchange_name%_%routing_key%_%delay%")
      *     * exchange_name: Name of the exchange to be used for the delayed/retried messages (Default: "delays")
+     *     * queue_expires: Whether delay queues are declared with "x-expires" (delay + 10s) so the broker
+     *       garbage-collects them; set to false to declare permanent delay queues instead (Default: true)
      *   * auto_setup: Enable or not the auto-setup of queues and exchanges (Default: true)
      *   * prefetch_count: set channel prefetch count
      */
@@ -291,16 +297,22 @@ class Connection
             $this->connectionOptions['delay']['queue_name_pattern']
         ));
         $queue->setFlags(\AMQP_DURABLE);
-        $queue->setArguments([
+        $arguments = [
             'x-message-ttl' => $delay,
-            // delete the delay queue 10 seconds after the message expires
-            // publishing another message redeclares the queue which renews the lease
-            'x-expires' => $delay + 10000,
             'x-dead-letter-exchange' => $this->exchangeOptions['name'],
             // after being released from to DLX, make sure the original routing key will be used
             // we must use an empty string instead of null for the argument to be picked up
             'x-dead-letter-routing-key' => $routingKey ?? '',
-        ]);
+        ];
+        if ($this->connectionOptions['delay']['queue_expires']) {
+            // delete the delay queue 10 seconds after the message expires
+            // publishing another message redeclares the queue which renews the lease.
+            // NOTE: on brokers where the redeclare does not renew the lease (observed
+            // on Amazon MQ), the deletion destroys any message whose TTL falls after
+            // it — set delay[queue_expires]=false to keep the delay queues permanent.
+            $arguments['x-expires'] = $delay + 10000;
+        }
+        $queue->setArguments($arguments);
 
         return $queue;
     }
